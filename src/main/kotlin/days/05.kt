@@ -3,7 +3,7 @@ package days
 import java.io.File
 
 fun main() {
-//    run5a()
+    run5a()
     run5b()
 }
 
