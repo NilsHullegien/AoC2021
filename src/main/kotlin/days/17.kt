@@ -1,7 +1,6 @@
 package days
 
 import java.io.File
-import java.text.FieldPosition
 
 fun main() {
     run17()
