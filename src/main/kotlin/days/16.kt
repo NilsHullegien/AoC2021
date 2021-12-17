@@ -54,10 +54,10 @@ class OperatorPacket(version: Int, packetTypeId: Int, private val subPackets: Li
 class NewStringPacket(val newInput: String): Packet(0, 0)
 
 fun run16a() {
-    val input = File("src/main/resources/16/16-test-6.txt").readLines()
+    val input = File("src/main/resources/16/16-test-5.txt").readLines()
         .map { line -> line.toCharArray().map { hexToBinaryMap[it] }.joinToString("") }.first()
-    println(input)
-    val packets = parseToPackets(input)
+    println("$input, ${input.length}")
+    val packets = parseToPackets(input, 0, input.length)
     println(packets)
     println(packets.first.sumOf { it.getVersionTotal() })
 }
@@ -66,76 +66,78 @@ fun run16b() {
 
 }
 
-fun parseToPackets(input: String): Pair<MutableList<Packet>, Int> {
-    println("PACKETS PARSE FROM INPUT $input")
+fun parseToPackets(input: String, startIdx: Int, endIdx: Int): Pair<MutableList<Packet>, Int> {
+    println("PACKETS PARSE FROM INPUT ${input.substring(startIdx, endIdx)}")
     if (input.length < 8) {
         println("INPUT ENDED $input, RETURNING")
         return Pair(mutableListOf(), -1)
     }
-    val version = Integer.parseInt(input.substring(0, 3), 2)
-    val typeId = Integer.parseInt(input.substring(3, 6), 2)
+    val version = Integer.parseInt(input.substring(startIdx + 0, startIdx + 3), 2)
+    val typeId = Integer.parseInt(input.substring(startIdx + 3, startIdx + 6), 2)
     println(version)
     println(typeId)
     when (typeId) {
         4 -> {
             println("LITERAL VALUE")
-            val packetNextPair = extractNumberFromSegmentBits(input, 6)
+            val packetNextPair = extractNumberFromSegmentBits(input, startIdx + 6)
             println("NEXT VALUE,IDX: $packetNextPair")
             if (input.substring(packetNextPair.second).length < 8) {
                 println("INPUT FOR IDX ${packetNextPair.second} IS DONE: ${input.substring(packetNextPair.second)}")
-                return Pair(mutableListOf(LiteralPacket(version, typeId, packetNextPair.first)), packetNextPair.second)
+                return Pair(mutableListOf(LiteralPacket(version, typeId, packetNextPair.first)), endIdx)
             } else if (packetNextPair.second == -1) {
                 return Pair(mutableListOf(LiteralPacket(version, typeId, packetNextPair.first)), -1)
             } else {
-                val packetList = parseToPackets(input.substring(packetNextPair.second))
+                val packetList = parseToPackets(input, packetNextPair.second, endIdx)
                 packetList.first.add(LiteralPacket(version, typeId, packetNextPair.first))
                 return packetList
             }
         }
         else -> {
-            when (input[6]) {
+            when (input[startIdx + 6]) {
                 '0' -> {
                     println("LENGTH TYPE ID 0")
                     //15 bits total length in bits of subpackets combined
-                    val totalLength = Integer.parseInt(input.substring(7, 22), 2)
+                    val totalLength = Integer.parseInt(input.substring(startIdx + 7, startIdx + 22), 2)
                     println("TOTAL LENGTH: $totalLength")
 
-                    val packetsPair = parseToPackets(input.substring(22, 22 + totalLength))
+                    val packetsPair = parseToPackets(input, startIdx + 22, startIdx + 22 + totalLength)
                     println("PACKETS PAIR: $packetsPair")
                     var lengthHasBeenReached = packetsPair.second
                     val fullPacketList: MutableList<Packet> = mutableListOf(OperatorPacket(version, typeId, packetsPair.first))
                     var flag = false
                     while (lengthHasBeenReached == -1) {
                         println("SECOND IS -1, INPUT IS $input")
-                        val parsedPair = parseToPackets(input)
+                        val parsedPair = parseToPackets(input, lengthHasBeenReached, endIdx)
                         fullPacketList.add(OperatorPacket(version, typeId, parsedPair.first))
                         lengthHasBeenReached = parsedPair.second
                         flag = true
                     }
                     if (flag) {
-                        return Pair(fullPacketList, 22 + totalLength)
+                        return Pair(fullPacketList, startIdx + 22 + totalLength)
                     }
-                    println("COMPARING ${packetsPair.second} TO ${22 + totalLength}")
-                    if (packetsPair.second < 22 + totalLength) {
+                    println("COMPARING ${packetsPair.second} TO ${startIdx + 22 + totalLength}")
+                    if (packetsPair.second < startIdx + 22 + totalLength) {
                         println("FULL LENGTH NOT REACHED YET, CONTINUING")
-                        val packetList = parseToPackets(input.substring(22+packetsPair.second, 22+totalLength))
+                        val packetList = parseToPackets(input, startIdx + 22 + packetsPair.second, startIdx + 22 + totalLength)
                         packetList.first.add(OperatorPacket(version, typeId, packetsPair.first))
                         return packetList
                     }
                     println("ALL DONE WITH LENGTH TYPE ID 0!")
-                    return Pair(mutableListOf(OperatorPacket(version, typeId, packetsPair.first)), packetsPair.second)
+                    return Pair(mutableListOf(OperatorPacket(version, typeId, packetsPair.first)), endIdx)
                 }
                 '1' -> {
                     println("LENGTH TYPE ID 1")
                     //11 bit nr of subpackets immediately contained in this packet
-                    val nrOfSubPackets = Integer.parseInt(input.substring(7, 18), 2)
+                    val nrOfSubPackets = Integer.parseInt(input.substring(startIdx + 7, startIdx + 18), 2)
                     println("Nr of subpackets: $nrOfSubPackets")
                     val list = mutableListOf<Packet>()
-                    var lastIdx = 18
+                    var lastIdx = startIdx + 18
                     for (i in 1..nrOfSubPackets) {
-                        val pair = parseToSinglePacket(input.substring(lastIdx))
+                        println("Packets loop $i")
+                        println("INPUT, LASTIDX, ENDIDX: ($input, $lastIdx, $endIdx)")
+                        val pair = parseToSinglePacket(input, lastIdx, endIdx)
                         list.add(pair.first)
-                        lastIdx += pair.second
+                        lastIdx = pair.second
                     }
                     println("DONE WITH TYPE 1")
                     return Pair(mutableListOf(OperatorPacket(version, typeId, list)), lastIdx)
@@ -146,44 +148,69 @@ fun parseToPackets(input: String): Pair<MutableList<Packet>, Int> {
     }
 }
 
-fun parseToSinglePacket(input: String): Pair<Packet, Int> {
-    println("PARSE SINGLE, analysing string $input")
+fun parseToSinglePacket(input: String, startIdx: Int, endIdx: Int): Pair<Packet, Int> {
+    println("PARSE SINGLE, analysing string ${input.substring(startIdx, endIdx)}, from $startIdx to $endIdx")
     if (input.length < 8) {
         throw RuntimeException("Shouldnt happen")
     }
-    val version = Integer.parseInt(input.substring(0, 3), 2)
-    val typeId = Integer.parseInt(input.substring(3, 6), 2)
+    val version = Integer.parseInt(input.substring(startIdx + 0, startIdx + 3), 2)
+    val typeId = Integer.parseInt(input.substring(startIdx + 3, startIdx + 6), 2)
     println(version)
     println(typeId)
     when (typeId) {
         4 -> {
             println("LITERAL VALUE")
-            val pair = extractNumberFromSegmentBits(input, 6)
+            val pair = extractNumberFromSegmentBits(input, startIdx + 6)
             println("SINGLE PAIR: $pair")
-            return Pair(LiteralPacket(version, typeId, pair.first), pair.second)
+            return Pair(LiteralPacket(version, typeId, pair.first), endIdx)
         }
         else -> {
-            when (input[6]) {
+            when (input[startIdx + 6]) {
                 '0' -> {
                     println("LENGTH TYPE ID 0")
                     //15 bits total length in bits of subpackets combined
-                    val totalLength = Integer.parseInt(input.substring(7, 22), 2)
+                    val totalLength = Integer.parseInt(input.substring(startIdx + 7, startIdx + 22), 2)
                     println("TOTAL LENGTH: $totalLength")
                     //Get all segments from 22 onwards until the end
-                    return Pair(OperatorPacket(version, typeId, parseToPackets(input.substring(22, 22 + totalLength)).first), 22 + totalLength)
+//                    return Pair(OperatorPacket(version, typeId, parseToPackets(input, startIdx + 22, startIdx + 22 + totalLength).first), endIdx)
+
+                    val packetsPair = parseToPackets(input, startIdx + 22, startIdx + 22 + totalLength)
+                    println("PACKETS PAIR: $packetsPair")
+                    var lengthHasBeenReached = packetsPair.second
+                    val fullPacketList: MutableList<Packet> = mutableListOf(OperatorPacket(version, typeId, packetsPair.first))
+                    var flag = false
+                    while (lengthHasBeenReached == -1) {
+                        println("SECOND IS -1, INPUT IS $input")
+                        val parsedPair = parseToPackets(input, lengthHasBeenReached, endIdx)
+                        fullPacketList.add(OperatorPacket(version, typeId, parsedPair.first))
+                        lengthHasBeenReached = parsedPair.second
+                        flag = true
+                    }
+                    if (flag) {
+                        return Pair(OperatorPacket(version, typeId, fullPacketList), startIdx + 22 + totalLength)
+                    }
+                    println("COMPARING ${packetsPair.second} TO ${startIdx + 22 + totalLength}")
+                    if (packetsPair.second < startIdx + 22 + totalLength) {
+                        println("FULL LENGTH NOT REACHED YET, CONTINUING")
+                        val packetList = parseToPackets(input, startIdx + 22 + packetsPair.second, startIdx + 22 + totalLength)
+                        packetList.first.add(OperatorPacket(version, typeId, packetsPair.first))
+                        return Pair(OperatorPacket(version, typeId, packetList.first), endIdx)
+                    }
+                    println("ALL DONE WITH LENGTH TYPE ID 0!")
+                    return Pair(OperatorPacket(version, typeId, packetsPair.first), endIdx)
                 }
                 '1' -> {
                     println("LENGTH TYPE ID 1")
                     //11 bit nr of subpackets immediately contained in this packet
-                    val nrOfSubPackets = Integer.parseInt(input.substring(7, 18), 2)
+                    val nrOfSubPackets = Integer.parseInt(input.substring(startIdx + 7, startIdx + 18), 2)
                     println("NR of subpackets: $nrOfSubPackets")
                     val list = mutableListOf<Packet>()
-                    var lastIdx = 18
+                    var lastIdx = startIdx + 18
                     for (i in 1..nrOfSubPackets) {
                         println("SINGLE PACKET LOOP $i")
-                        val pair = parseToSinglePacket(input.substring(lastIdx))
+                        val pair = parseToSinglePacket(input, lastIdx, endIdx)
                         list.add(pair.first)
-                        lastIdx += pair.second
+                        lastIdx = pair.second
                     }
                     println("DONE WITH TYPE 1")
                     return Pair(OperatorPacket(version, typeId, list), lastIdx)
@@ -204,6 +231,7 @@ fun extractNumberFromSegmentBits(input: String, startIdx: Int): Pair<Int, Int> {
         val nr = segment.substring(1..4)
         totalNr += nr
         if (prefixBit == '0') {
+            println("SEGMENT $segment, value ${Integer.parseInt(totalNr, 2)}")
             nextIdx = i + 5
             break
         }
