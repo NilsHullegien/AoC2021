@@ -127,7 +127,8 @@ class NullFish(depth: Int, parent: NodeFish?): Fish(depth, parent) {
 }
 
 fun main() {
-    run18a()
+//    run18a()
+    run18b()
 }
 
 fun run18a() {
@@ -136,6 +137,36 @@ fun run18a() {
     for (line in input) {
         lines.add(parseJsonToFish(Klaxon().parseJsonArray(StringReader(line)), 0, null))
     }
+    println("18a: ${calculateMagnitude(lines)}")
+}
+
+fun run18b() {
+
+    val inputTmp = File("src/main/resources/18/18-input.txt").readLines()
+    var maxValue = -1
+    for (x in inputTmp.indices) {
+        for (y in inputTmp.indices) {
+
+            if (x == y) {
+                continue
+            }
+            val input = File("src/main/resources/18/18-input.txt").readLines()
+            val lines = mutableListOf<Fish>()
+            for (line in input) {
+                lines.add(parseJsonToFish(Klaxon().parseJsonArray(StringReader(line)), 0, null))
+            }
+
+            val tempMax = calculateMagnitude(mutableListOf(lines[x], lines[y]))
+            if (tempMax > maxValue) {
+//                println("NEW MAX ($tempMax) WITH ${lines[x]} \nAND\n ${lines[y]}")
+                maxValue = tempMax
+            }
+        }
+    }
+    println("18b: $maxValue")
+}
+
+fun calculateMagnitude(lines: MutableList<Fish>): Int {
     var line = lines[0]
 
     for (i in 1 until lines.size) {
@@ -148,21 +179,21 @@ fun run18a() {
         res.left = line
         res.right = newLine
         line = res
-        println("After addition: $line")
+//        println("After addition: $line")
         while (true) { //True until no more explosions and splits occur
             var hasExploded = false
             var hasSplit = false
             if (hasExplodeCriteria(line)) {
                 val explodeFish = line.getFirstExplodingFish()!!
-                println("EXPLODE FISH: $explodeFish")
+//                println("EXPLODE FISH: $explodeFish")
 
                 val firstLeftValue = getFirstValueLeft(explodeFish, explodeFish)
                 val firstRightValue = getFirstValueRight(explodeFish, explodeFish)
-                println("LEFT VALUE: $firstLeftValue")
-                println("RIGHT VALUE: $firstRightValue")
+//                println("LEFT VALUE: $firstLeftValue")
+//                println("RIGHT VALUE: $firstRightValue")
 
                 val parentExplodeFish = explodeFish.parent ?: throw RuntimeException("HAAAAALP")
-                println("PARENT EXPLODE FISH: $parentExplodeFish")
+//                println("PARENT EXPLODE FISH: $parentExplodeFish")
                 if (parentExplodeFish.left == explodeFish) {
                     parentExplodeFish.left = LeafFish(0, parentExplodeFish.depth, parentExplodeFish)
                 } else if (parentExplodeFish.right == explodeFish) {
@@ -180,21 +211,21 @@ fun run18a() {
                     firstRightValue.value += (explodeFish.right as LeafFish).value
                 }
 
-                println("After explode: $line")
+//                println("After explode: $line")
                 hasExploded = true
             }
             if (!hasExploded && hasValueOver9(line)) {
                 val splittingFish = line.getFirstSplittingFish()!!
                 val parentSplitFish = splittingFish.parent ?: throw RuntimeException("HAAAAALP")
-                println("SPLIT FISH $splittingFish")
-                println("PARENT SPLIT FISH $parentSplitFish")
+//                println("SPLIT FISH $splittingFish")
+//                println("PARENT SPLIT FISH $parentSplitFish")
                 val newSplitFish = NodeFish(NullFish(-1, null), NullFish(-1, null), splittingFish.depth + 1, parentSplitFish)
                 val leftLeafFish =
                     LeafFish(floor(splittingFish.value / 2f).toInt(), splittingFish.depth + 1, newSplitFish)
                 val rightLeafFish = LeafFish(ceil(splittingFish.value / 2f).toInt(), splittingFish.depth + 1, newSplitFish)
                 newSplitFish.left = leftLeafFish
                 newSplitFish.right = rightLeafFish
-                println("NEW SPLITTED FISH: $newSplitFish")
+//                println("NEW SPLITTED FISH: $newSplitFish")
                 if (parentSplitFish.left == splittingFish) {
                     parentSplitFish.left = newSplitFish
                 } else if (parentSplitFish.right == splittingFish){
@@ -205,19 +236,18 @@ fun run18a() {
                 }
 
 
-                println("After split: $line")
+//                println("After split: $line")
                 hasSplit = true
             }
 
             if (!hasExploded && !hasSplit) {
-                println("FULLY OPTIMIZED!")
+//                println("FULLY OPTIMIZED!")
                 break
             }
         }
-        println("After everything: $line")
-        println("19a: ${line.getMagnitude()}")
-//        throw RuntimeException("BREAK")
     }
+//    println("After everything: $line")
+    return line.getMagnitude()
 }
 
 fun getFirstValueLeft(explodeFish: NodeFish, prevFish: Fish): LeafFish? {
