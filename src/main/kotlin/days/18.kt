@@ -17,6 +17,7 @@ abstract class Fish(var depth: Int, var parent: NodeFish?) {
     abstract fun getFirstExplodingFish(): NodeFish?
     abstract fun getFirstSplittingFish(): LeafFish?
     abstract fun updateDepth()
+    abstract fun getMagnitude(): Int
 }
 
 class NodeFish(var left: Fish, var right: Fish, depth: Int, parent: NodeFish?): Fish(depth, parent) {
@@ -59,11 +60,19 @@ class NodeFish(var left: Fish, var right: Fish, depth: Int, parent: NodeFish?): 
         left.updateDepth()
         right.updateDepth()
     }
+
+    override fun getMagnitude(): Int {
+        return 3 * left.getMagnitude() + 2 * right.getMagnitude()
+    }
 }
 
 class LeafFish(var value: Int, depth: Int, parent: NodeFish?): Fish(depth, parent) {
     override fun toString(): String {
         return "LeafFish(${super.toString()}, value=$value)"
+    }
+
+    override fun getMagnitude(): Int {
+        return value
     }
 
     override fun getMaxDepth(): Int {
@@ -111,6 +120,10 @@ class NullFish(depth: Int, parent: NodeFish?): Fish(depth, parent) {
     override fun updateDepth() {
         depth++
     }
+
+    override fun getMagnitude(): Int {
+        return -1
+    }
 }
 
 fun main() {
@@ -118,48 +131,45 @@ fun main() {
 }
 
 fun run18a() {
-    val input = File("src/main/resources/18/split/18-test-1.txt").readLines()
+    val input = File("src/main/resources/18/18-input.txt").readLines()
     val lines = mutableListOf<Fish>()
     for (line in input) {
         lines.add(parseJsonToFish(Klaxon().parseJsonArray(StringReader(line)), 0, null))
     }
     var line = lines[0]
-    for (i in 0 until lines.size) {
-//        val newLine = lines[i]
-//        line.updateDepth()
-//        line = NodeFish(line, newLine, 0, null)
-//        println("After addition: $line")
+
+    for (i in 1 until lines.size) {
+        val newLine = lines[i]
+        line.updateDepth()
+        newLine.updateDepth()
+        val res = NodeFish(NullFish(-1, null), NullFish(-1, null), 0, null)
+        line.parent = res
+        newLine.parent = res
+        res.left = line
+        res.right = newLine
+        line = res
+        println("After addition: $line")
         while (true) { //True until no more explosions and splits occur
             var hasExploded = false
             var hasSplit = false
             if (hasExplodeCriteria(line)) {
                 val explodeFish = line.getFirstExplodingFish()!!
+                println("EXPLODE FISH: $explodeFish")
 
-                val firstLeftValue = getFirstValueLeft(explodeFish)
-                val firstRightValue = getFirstValueRight(explodeFish)
+                val firstLeftValue = getFirstValueLeft(explodeFish, explodeFish)
+                val firstRightValue = getFirstValueRight(explodeFish, explodeFish)
+                println("LEFT VALUE: $firstLeftValue")
+                println("RIGHT VALUE: $firstRightValue")
 
-                var parentExplodeFish = explodeFish.parent ?: throw RuntimeException("HAAAAALP")
+                val parentExplodeFish = explodeFish.parent ?: throw RuntimeException("HAAAAALP")
+                println("PARENT EXPLODE FISH: $parentExplodeFish")
                 if (parentExplodeFish.left == explodeFish) {
-                    val leftLeaf = LeafFish(0, parentExplodeFish.depth, parentExplodeFish.parent)
-                    val rightLeaf = LeafFish(
-                        (explodeFish.right as LeafFish).value + (parentExplodeFish.right as LeafFish).value,
-                        parentExplodeFish.depth,
-                        parentExplodeFish.parent
-                    )
-                    parentExplodeFish = NodeFish(leftLeaf, rightLeaf, parentExplodeFish.depth, parentExplodeFish.parent)
+                    parentExplodeFish.left = LeafFish(0, parentExplodeFish.depth, parentExplodeFish)
+                } else if (parentExplodeFish.right == explodeFish) {
+                    parentExplodeFish.right = LeafFish(0, parentExplodeFish.depth, parentExplodeFish)
+
                 } else {
-                    val leftLeaf = LeafFish(
-                        (explodeFish.left as LeafFish).value + (parentExplodeFish.left as LeafFish).value,
-                        parentExplodeFish.depth,
-                        parentExplodeFish.parent
-                    )
-                    val rightLeaf = LeafFish(0, parentExplodeFish.depth, parentExplodeFish.parent)
-                    parentExplodeFish = NodeFish(leftLeaf, rightLeaf, parentExplodeFish.depth, parentExplodeFish.parent)
-                }
-                if (parentExplodeFish.parent!!.left == explodeFish.parent) {
-                    parentExplodeFish.parent!!.left = parentExplodeFish
-                } else {
-                    parentExplodeFish.parent!!.right = parentExplodeFish
+                    throw RuntimeException("SOMETHING GOING WRONG WITH EXPLODING;\n FISH $explodeFish\n ParentFish $parentExplodeFish")
                 }
 
                 if (firstLeftValue != null) {
@@ -175,22 +185,28 @@ fun run18a() {
             }
             if (!hasExploded && hasValueOver9(line)) {
                 val splittingFish = line.getFirstSplittingFish()!!
+                val parentSplitFish = splittingFish.parent ?: throw RuntimeException("HAAAAALP")
                 println("SPLIT FISH $splittingFish")
-                println("PARENT SPLIT FISH $splittingFish")
-                val newSplittedFish = NodeFish(
-                    LeafFish(floor(splittingFish.value / 2f).toInt(), splittingFish.depth, splittingFish.parent),
-                    LeafFish(ceil(splittingFish.value / 2f).toInt(), splittingFish.depth, splittingFish.parent),
-                    splittingFish.depth,
-                    splittingFish.parent
-                )
-                println("NEW SPLITTED FISH: $newSplittedFish")
-                if (splittingFish.parent!!.left == splittingFish) {
-                    splittingFish.parent!!.left = newSplittedFish
+                println("PARENT SPLIT FISH $parentSplitFish")
+                val newSplitFish = NodeFish(NullFish(-1, null), NullFish(-1, null), splittingFish.depth + 1, parentSplitFish)
+                val leftLeafFish =
+                    LeafFish(floor(splittingFish.value / 2f).toInt(), splittingFish.depth + 1, newSplitFish)
+                val rightLeafFish = LeafFish(ceil(splittingFish.value / 2f).toInt(), splittingFish.depth + 1, newSplitFish)
+                newSplitFish.left = leftLeafFish
+                newSplitFish.right = rightLeafFish
+                println("NEW SPLITTED FISH: $newSplitFish")
+                if (parentSplitFish.left == splittingFish) {
+                    parentSplitFish.left = newSplitFish
+                } else if (parentSplitFish.right == splittingFish){
+                    parentSplitFish.right = newSplitFish
                 } else {
-                    splittingFish.parent!!.right = newSplittedFish
+                    println("ERROR: $parentSplitFish does not contain subFish $splittingFish")
+                    throw RuntimeException("SHOULD NOT HAPPEN!")
                 }
-                hasSplit = true
+
+
                 println("After split: $line")
+                hasSplit = true
             }
 
             if (!hasExploded && !hasSplit) {
@@ -199,25 +215,33 @@ fun run18a() {
             }
         }
         println("After everything: $line")
+        println("19a: ${line.getMagnitude()}")
+//        throw RuntimeException("BREAK")
     }
 }
 
-fun getFirstValueLeft(explodeFish: NodeFish): LeafFish? {
+fun getFirstValueLeft(explodeFish: NodeFish, prevFish: Fish): LeafFish? {
     if (explodeFish.parent == null) {
+        if (explodeFish.right == prevFish || explodeFish == prevFish) {
+            return rightMostLeafFish(explodeFish.left)
+        }
         return null
     }
     if (explodeFish.parent!!.left == explodeFish) {
-        return getFirstValueLeft(explodeFish.parent!!)
+        return getFirstValueLeft(explodeFish.parent!!, explodeFish)
     }
     return rightMostLeafFish(explodeFish.parent!!.left)
 }
 
-fun getFirstValueRight(explodeFish: NodeFish): LeafFish? {
+fun getFirstValueRight(explodeFish: NodeFish, prevFish: Fish): LeafFish? {
     if (explodeFish.parent == null) {
+        if (explodeFish.left == prevFish || explodeFish == prevFish) {
+            return leftMostLeafFish(explodeFish.right)
+        }
         return null
     }
     if (explodeFish.parent!!.right == explodeFish) {
-        return getFirstValueRight(explodeFish.parent!!)
+        return getFirstValueRight(explodeFish.parent!!, explodeFish)
     }
     return leftMostLeafFish(explodeFish.parent!!.right)
 }
@@ -248,15 +272,17 @@ fun hasValueOver9(line: Fish): Boolean {
 fun parseJsonToFish(input: JsonArray<*>, depth: Int, parentFish: NodeFish?): Fish {
     var leftPartFish: Fish = NullFish(depth, parentFish)
     var rightPartFish: Fish = NullFish(depth, parentFish)
+    val resFish = NodeFish(leftPartFish, rightPartFish, depth, parentFish)
     if (input[0] is Int) {
-        leftPartFish = LeafFish(input[0] as Int, depth, parentFish)
+        leftPartFish = LeafFish(input[0] as Int, depth, resFish)
     }
 
     if (input[1] is Int) {
-        rightPartFish = LeafFish(input[1] as Int, depth, parentFish)
+        rightPartFish = LeafFish(input[1] as Int, depth, resFish)
     }
 
-    val resFish = NodeFish(leftPartFish, rightPartFish, depth, parentFish)
+    resFish.left = leftPartFish
+    resFish.right = rightPartFish
     if (input[0] is JsonArray<*>) {
         resFish.left = parseJsonToFish(input[0] as JsonArray<*>, depth + 1,  resFish)
     }
